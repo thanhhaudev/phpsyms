@@ -96,3 +96,70 @@ func TestLex_NeverPanicsOnGarbage(t *testing.T) {
 		}()
 	}
 }
+
+func TestLex_BlockCommentConsumesFinalByte(t *testing.T) {
+	src := []byte("<?php /* abcX")
+	toks := Lex("t.php", src)
+	// Expect: OpenTag, Comment("/* abcX"), EOF — no leaked TokIdent for 'X'.
+	var sawComment bool
+	for _, tk := range toks {
+		if tk.Kind == TokComment {
+			sawComment = true
+			if tk.Value != "/* abcX" {
+				t.Errorf("unterminated comment body: got %q want %q", tk.Value, "/* abcX")
+			}
+		}
+		if tk.Kind == TokIdent && tk.Value == "X" {
+			t.Errorf("byte 'X' leaked out of unterminated comment: %+v", toks)
+		}
+	}
+	if !sawComment {
+		t.Fatal("no comment token emitted")
+	}
+}
+
+func TestLex_SingleStringValueStrippedOfQuotes(t *testing.T) {
+	src := []byte("<?php $x = 'hello';")
+	toks := Lex("t.php", src)
+	var found bool
+	for _, tk := range toks {
+		if tk.Kind == TokString {
+			found = true
+			if tk.Value != "hello" {
+				t.Errorf("single-quoted Value: got %q want %q", tk.Value, "hello")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("no string token emitted")
+	}
+}
+
+func TestLex_TokenStartPositionAtFirstByte(t *testing.T) {
+	// Verify multi-byte tokens record StartLine/StartCol at the FIRST byte,
+	// not after the last byte. Source: `<?php class Foo`
+	// Positions (1-based col): `<` at col 1, `c` of `class` at col 7, `F` of `Foo` at col 13.
+	src := []byte("<?php class Foo")
+	toks := Lex("t.php", src)
+	if len(toks) < 3 {
+		t.Fatalf("need at least 3 tokens, got %d", len(toks))
+	}
+	// toks[0] = TokOpenTag "<?php", col 1
+	if toks[0].StartCol != 1 || toks[0].StartLine != 1 {
+		t.Errorf("OpenTag startpos: %+v", toks[0])
+	}
+	// toks[1] = TokKeyword "class", col 7 (after "<?php ")
+	if toks[1].Value != "class" {
+		t.Fatalf("unexpected toks[1]: %+v", toks[1])
+	}
+	if toks[1].StartCol != 7 || toks[1].StartLine != 1 {
+		t.Errorf("keyword 'class' startpos: got col=%d line=%d, want col=7 line=1; tok=%+v", toks[1].StartCol, toks[1].StartLine, toks[1])
+	}
+	// toks[2] = TokIdent "Foo", col 13
+	if toks[2].Value != "Foo" {
+		t.Fatalf("unexpected toks[2]: %+v", toks[2])
+	}
+	if toks[2].StartCol != 13 {
+		t.Errorf("ident 'Foo' startpos: got col=%d, want col=13; tok=%+v", toks[2].StartCol, toks[2])
+	}
+}
