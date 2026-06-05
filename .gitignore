@@ -1,0 +1,14 @@
+# Go build artifacts
+*.test
+*.out
+*.prof
+cover.html
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Local-only fixtures (0PLXX-derived samples never committed)
+testdata/0PLXX-local/
