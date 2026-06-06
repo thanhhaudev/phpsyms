@@ -3,6 +3,7 @@
 *.out
 *.prof
 cover.html
+spike-validate
 
 # IDE
 .idea/
