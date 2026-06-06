@@ -12,6 +12,8 @@ func Extract(filename string, src []byte) ([]Symbol, error) {
 	toks := lexer.Lex(filename, src)
 	syms := extractor.Run(toks, []func(c *extractor.Cursor, current string) (symtype.Symbol, bool, string){
 		extractor.ClassDecl,
+		extractor.InterfaceDecl,
+		extractor.TraitDecl,
 		extractor.MethodDecl,
 	})
 	return syms, nil

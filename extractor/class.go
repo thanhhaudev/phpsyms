@@ -118,3 +118,77 @@ func tokenRange(start, end lexer.Token) symtype.Range {
 		EndByte:   end.EndByte,
 	}
 }
+
+// InterfaceDecl matches:
+//
+//	interface Name [extends I1, I2, I3] {
+//
+// Multi-extends list is captured in Symbol.Implements since Symbol.Parent is
+// single-valued. newClass returned so MethodDecl can attach methods to the
+// interface scope.
+func InterfaceDecl(c *Cursor, currentClass string) (symtype.Symbol, bool, string) {
+	startPos := c.Pos
+	if c.Cur().Kind != lexer.TokKeyword || c.Cur().Value != "interface" {
+		return symtype.Symbol{}, false, ""
+	}
+	kw := c.Cur()
+	c.Advance()
+	c.SkipTrivia()
+	if c.Cur().Kind != lexer.TokIdent {
+		c.Pos = startPos
+		return symtype.Symbol{}, false, ""
+	}
+	nameTok := c.Cur()
+	c.Advance()
+	c.SkipTrivia()
+
+	var extends []string
+	if c.Cur().Kind == lexer.TokKeyword && c.Cur().Value == "extends" {
+		c.Advance()
+		c.SkipTrivia()
+		for {
+			name := consumeQualifiedName(c)
+			if name == "" {
+				break
+			}
+			extends = append(extends, name)
+			c.SkipTrivia()
+			if c.Cur().Kind != lexer.TokComma {
+				break
+			}
+			c.Advance()
+			c.SkipTrivia()
+		}
+	}
+
+	return symtype.Symbol{
+		Kind:       symtype.KindInterface,
+		Name:       nameTok.Value,
+		Range:      tokenRange(kw, nameTok),
+		Implements: extends,
+	}, true, nameTok.Value
+}
+
+// TraitDecl matches:
+//
+//	trait Name {
+func TraitDecl(c *Cursor, currentClass string) (symtype.Symbol, bool, string) {
+	startPos := c.Pos
+	if c.Cur().Kind != lexer.TokKeyword || c.Cur().Value != "trait" {
+		return symtype.Symbol{}, false, ""
+	}
+	kw := c.Cur()
+	c.Advance()
+	c.SkipTrivia()
+	if c.Cur().Kind != lexer.TokIdent {
+		c.Pos = startPos
+		return symtype.Symbol{}, false, ""
+	}
+	nameTok := c.Cur()
+	c.Advance()
+	return symtype.Symbol{
+		Kind:  symtype.KindTrait,
+		Name:  nameTok.Value,
+		Range: tokenRange(kw, nameTok),
+	}, true, nameTok.Value
+}
