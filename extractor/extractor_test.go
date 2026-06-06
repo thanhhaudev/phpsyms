@@ -229,6 +229,65 @@ func sliceContains(s []string, want string) bool {
 	return false
 }
 
+func TestExtract_AnonymousClass(t *testing.T) {
+	src := []byte(`<?php
+class Factory {
+    public function make() {
+        return new class {
+            public function hello(): string { return "hi"; }
+        };
+    }
+}`)
+	syms, _ := phpsyms.Extract("t.php", src)
+	// Expect: Factory (named class), make (method of Factory), anonymous class
+	// with empty Name, hello (method whose Parent = "<anonymous>").
+	var (
+		anonCount int
+		helloSym  *phpsyms.Symbol
+	)
+	for i := range syms {
+		s := syms[i]
+		if s.Kind == phpsyms.KindClass && s.Name == "" {
+			anonCount++
+		}
+		if s.Kind == phpsyms.KindMethod && s.Name == "hello" {
+			helloSym = &syms[i]
+		}
+	}
+	if anonCount < 1 {
+		t.Errorf("anonymous class not emitted; got %+v", syms)
+	}
+	if helloSym == nil {
+		t.Errorf("hello method not emitted; got %+v", syms)
+	} else if helloSym.Parent != "<anonymous>" {
+		t.Errorf("hello.Parent: got %q, want %q", helloSym.Parent, "<anonymous>")
+	}
+}
+
+func TestExtract_AnonymousClassWithExtends(t *testing.T) {
+	src := []byte(`<?php
+return new class extends BaseHandler implements Stringable {
+    public function handle() {}
+};`)
+	syms, _ := phpsyms.Extract("t.php", src)
+	var anonClass *phpsyms.Symbol
+	for i := range syms {
+		if syms[i].Kind == phpsyms.KindClass && syms[i].Name == "" {
+			anonClass = &syms[i]
+			break
+		}
+	}
+	if anonClass == nil {
+		t.Fatalf("anonymous class not emitted; got %+v", syms)
+	}
+	if anonClass.Parent != "BaseHandler" {
+		t.Errorf("anonymous class Parent: got %q, want %q", anonClass.Parent, "BaseHandler")
+	}
+	if len(anonClass.Implements) != 1 || anonClass.Implements[0] != "Stringable" {
+		t.Errorf("anonymous class Implements: %+v", anonClass.Implements)
+	}
+}
+
 func TestExtract_NamespacedStaticCall(t *testing.T) {
 	src := []byte(`<?php
 function run() {

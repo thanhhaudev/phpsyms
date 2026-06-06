@@ -39,13 +39,17 @@ func ClassDecl(c *Cursor, currentClass string) ([]symtype.Symbol, string, bool) 
 	c.Advance()
 	c.SkipTrivia()
 
-	if c.Cur().Kind != lexer.TokIdent {
-		// Anonymous class — spike scope does not emit. Phase1 Task 11 will handle.
-		c.Pos = startPos
-		return nil, "", false
+	var nameTok lexer.Token
+	anonymous := false
+	if c.Cur().Kind == lexer.TokIdent {
+		nameTok = c.Cur()
+		c.Advance()
+	} else {
+		// Anonymous class: `new class [extends ...] [implements ...] { ... }`.
+		// nameTok stays zero; we use classKw position for the Range.
+		anonymous = true
+		nameTok = classKw
 	}
-	nameTok := c.Cur()
-	c.Advance()
 	c.SkipTrivia()
 
 	parent := ""
@@ -75,14 +79,19 @@ func ClassDecl(c *Cursor, currentClass string) ([]symtype.Symbol, string, bool) 
 		}
 	}
 
-	return []symtype.Symbol{{
+	sym := symtype.Symbol{
 		Kind:       symtype.KindClass,
-		Name:       nameTok.Value,
+		Name:       "",
 		Range:      tokenRange(classKw, nameTok),
 		Modifiers:  modifiers,
 		Parent:     parent,
 		Implements: implements,
-	}}, nameTok.Value, true
+	}
+	if !anonymous {
+		sym.Name = nameTok.Value
+		return []symtype.Symbol{sym}, nameTok.Value, true
+	}
+	return []symtype.Symbol{sym}, "<anonymous>", true
 }
 
 // consumeQualifiedName reads `Foo\Bar\Baz` style names (with leading \ optional).
