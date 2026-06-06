@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.2.0 — 2026-06-06
+
+- New `KindTypeRef` symbol kind: emitted from function/method parameter type
+  hints + return-type annotations. Uses CamelCase regex `[A-Z][A-Za-z0-9_]*`
+  and filters PHP pseudo-constants `True`/`False`/`Null`. Mirrors the SymTypeRef
+  emission of the tree-sitter PHP walker in llmreviewkit.
+- Lexer `Token` struct gains `EndLine` + `EndCol` (exclusive end positions).
+- `tokenRange` now uses `end.EndLine` / `end.EndCol` so `Symbol.Range` covers
+  the full span of the last token, not just its start position.
+- Cursor now carries the source bytes (`Source []byte`) so patterns can
+  slice annotation text for regex extraction.
+- Parity floor on the laravel-framework corpus updated: typeRefs ≥ 244.
+
 ## v0.1.0 — 2026-06-06
 
 Initial release. PHP 7.4 baseline.

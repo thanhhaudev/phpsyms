@@ -4,7 +4,7 @@ Go-native PHP symbol extractor. Stdlib-only, ~1.5k LOC, no AST.
 
 ## Install
 
-    go get github.com/thanhhaudev/phpsyms@v0.1.0
+    go get github.com/thanhhaudev/phpsyms@v0.2.0
 
 ## Use
 
@@ -33,6 +33,7 @@ for _, s := range syms {
 | `KindStaticCall` | `Foo::bar()` — `Parent` holds the qualified class |
 | `KindMethodCall` | `$obj->method()` — `Receiver` holds the variable name (no `$`) |
 | `KindFunctionCall` | `name()` at expression position |
+| `KindTypeRef` | parameter type hint or return-type CamelCase identifier (filters `True`/`False`/`Null`) |
 
 ## Supported PHP
 
@@ -60,5 +61,9 @@ tree-sitter PHP cursor walk runs at ~5–20 files/sec on similar code.
 
 ## Status
 
-`v0.1.0` — stable surface, PHP 7.4 baseline. Future versions add PHP 8.x
-features and Blade template support.
+`v0.2.0` — stable surface, PHP 7.4 baseline. Adds `KindTypeRef` extraction
+from parameter type hints + return-type annotations (mirrors LLM-review-style
+type-reference tracking). Lexer tokens now carry both `Start*` and `End*`
+line/column positions.
+
+Future versions add PHP 8.x features and Blade template support.
