@@ -16,6 +16,7 @@ const (
 	KindStaticCall   = symtype.KindStaticCall
 	KindMethodCall   = symtype.KindMethodCall
 	KindFunctionCall = symtype.KindFunctionCall
+	KindTypeRef      = symtype.KindTypeRef
 )
 
 // Range is a byte+line span in the source file.

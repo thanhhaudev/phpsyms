@@ -15,6 +15,7 @@ const (
 	KindStaticCall
 	KindMethodCall
 	KindFunctionCall
+	KindTypeRef // parameter type hints + return type annotations (CamelCase identifiers)
 )
 
 // Range is a byte+line span in the source file.

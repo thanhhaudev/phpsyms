@@ -10,6 +10,8 @@ import (
 //	function name(...) [: RetType] {
 //
 // Methods are handled by MethodDecl; this is gated on currentClass == "".
+// Also emits KindTypeRef symbols for each CamelCase type name found in the
+// parameter list and return type annotation.
 func FunctionDecl(c *Cursor, currentClass string) ([]symtype.Symbol, string, bool) {
 	if currentClass != "" {
 		return nil, "", false
@@ -27,9 +29,14 @@ func FunctionDecl(c *Cursor, currentClass string) ([]symtype.Symbol, string, boo
 	}
 	nameTok := c.Cur()
 	c.Advance()
-	return []symtype.Symbol{{
+
+	fnSym := symtype.Symbol{
 		Kind:  symtype.KindFunction,
 		Name:  nameTok.Value,
 		Range: tokenRange(kw, nameTok),
-	}}, "", true
+	}
+
+	result := []symtype.Symbol{fnSym}
+	result = append(result, collectTypeRefs(c)...)
+	return result, "", true
 }
