@@ -5,6 +5,8 @@
 package extractor
 
 import (
+	"regexp"
+
 	"github.com/thanhhaudev/phpsyms/internal/symtype"
 	"github.com/thanhhaudev/phpsyms/lexer"
 )
@@ -13,6 +15,26 @@ import (
 type Cursor struct {
 	Tokens []lexer.Token
 	Pos    int
+	Source []byte // underlying source bytes for byte-range text extraction
+}
+
+// camelCaseIdent matches PHP user-defined type names (PSR-1 CamelCase). Used
+// to extract type references from parameter list + return type annotation
+// text, mirroring llmreviewkit's tree-sitter SymTypeRef emission.
+var camelCaseIdent = regexp.MustCompile(`[A-Z][A-Za-z0-9_]*`)
+
+// extractTypeNames returns CamelCase identifiers from a type annotation
+// substring. Filters PHP pseudo-constants True/False/Null.
+func extractTypeNames(text string) []string {
+	matches := camelCaseIdent.FindAllString(text, -1)
+	out := matches[:0]
+	for _, m := range matches {
+		if m == "True" || m == "False" || m == "Null" {
+			continue
+		}
+		out = append(out, m)
+	}
+	return out
 }
 
 func (c *Cursor) Peek(offset int) lexer.Token {
@@ -51,11 +73,12 @@ type Pattern func(c *Cursor, currentClass string) (syms []symtype.Symbol, newCla
 // Brace depth is tracked to clear currentClass when execution exits the
 // class body, so top-level functions after a class are not misattributed as
 // methods.
-func Run(toks []lexer.Token, patterns []Pattern) []symtype.Symbol {
+func Run(toks []lexer.Token, src []byte, patterns []Pattern) []symtype.Symbol {
 	var out []symtype.Symbol
 	// Stack-allocate the cursor to avoid a heap escape.
 	var cur Cursor
 	cur.Tokens = toks
+	cur.Source = src
 	c := &cur
 	currentClass := ""
 	classDepth := 0 // brace depth at which currentClass was opened

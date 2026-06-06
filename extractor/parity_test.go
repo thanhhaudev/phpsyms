@@ -17,7 +17,7 @@ func TestParity_LaravelFramework(t *testing.T) {
 	if _, err := os.Stat(root); os.IsNotExist(err) {
 		t.Skip("laravel-framework corpus not present")
 	}
-	var classCount, methodCount, useCount, callCount int
+	var classCount, methodCount, useCount, callCount, typeRefCount int
 	err := filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() || filepath.Ext(p) != ".php" {
 			return err
@@ -37,6 +37,8 @@ func TestParity_LaravelFramework(t *testing.T) {
 				useCount++
 			case phpsyms.KindStaticCall, phpsyms.KindMethodCall, phpsyms.KindFunctionCall:
 				callCount++
+			case phpsyms.KindTypeRef:
+				typeRefCount++
 			}
 		}
 		return nil
@@ -44,7 +46,8 @@ func TestParity_LaravelFramework(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("laravel-framework: classes=%d methods=%d uses=%d calls=%d", classCount, methodCount, useCount, callCount)
+	t.Logf("laravel-framework: classes=%d methods=%d uses=%d calls=%d typeRefs=%d",
+		classCount, methodCount, useCount, callCount, typeRefCount)
 
 	// Baselines pinned during initial corpus collection. The numbers reflect
 	// what the v0.1.0 extractor sees on the ~51-file laravel-framework slice.
@@ -62,5 +65,9 @@ func TestParity_LaravelFramework(t *testing.T) {
 	}
 	if callCount < 2474 {
 		t.Errorf("call coverage regression: got %d, want ≥2474", callCount)
+	}
+	// typeRef floor: measured 287 on initial corpus; floor at ~85% of measured.
+	if typeRefCount < 244 {
+		t.Errorf("typeRef coverage regression: got %d, want ≥244", typeRefCount)
 	}
 }

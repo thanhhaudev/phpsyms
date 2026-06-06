@@ -10,6 +10,8 @@ import (
 //	[public|protected|private|static|abstract|final]* function name(...) [: RetType] {
 //
 // Only emits when inside a class scope (currentClass != "").
+// Also emits KindTypeRef symbols for each CamelCase type name found in the
+// parameter list and return type annotation.
 func MethodDecl(c *Cursor, currentClass string) ([]symtype.Symbol, string, bool) {
 	if currentClass == "" {
 		return nil, "", false
@@ -47,11 +49,15 @@ func MethodDecl(c *Cursor, currentClass string) ([]symtype.Symbol, string, bool)
 	nameTok := c.Cur()
 	c.Advance()
 
-	return []symtype.Symbol{{
+	methodSym := symtype.Symbol{
 		Kind:      symtype.KindMethod,
 		Name:      nameTok.Value,
 		Range:     tokenRange(fnKw, nameTok),
 		Modifiers: modifiers,
 		Parent:    currentClass,
-	}}, "", true
+	}
+
+	result := []symtype.Symbol{methodSym}
+	result = append(result, collectTypeRefs(c)...)
+	return result, "", true
 }

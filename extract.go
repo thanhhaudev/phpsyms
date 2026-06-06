@@ -26,6 +26,6 @@ var defaultPatterns = []extractor.Pattern{
 // v0.2.0 patterns: StaticCall, MethodCall, FunctionCall.
 func Extract(filename string, src []byte) ([]Symbol, error) {
 	toks := lexer.Lex(filename, src)
-	syms := extractor.Run(toks, defaultPatterns)
+	syms := extractor.Run(toks, src, defaultPatterns)
 	return syms, nil
 }

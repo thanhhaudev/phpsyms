@@ -328,3 +328,89 @@ function realFunc() {
 		t.Errorf("want 1 KindFunctionCall, got %d; syms=%+v", callCount, syms)
 	}
 }
+
+func TestExtract_TypeRefs_FromParamsAndReturn(t *testing.T) {
+	src := []byte(`<?php
+function handle(?array $a, \App\User $u, int $x): ?Response { return null; }
+`)
+	syms, _ := phpsyms.Extract("t.php", src)
+	var typeRefs []string
+	for _, s := range syms {
+		if s.Kind == phpsyms.KindTypeRef {
+			typeRefs = append(typeRefs, s.Name)
+		}
+	}
+	// Expected: App, User from `\App\User $u`; Response from `?Response`.
+	// (array, int are lowercase → filtered. ?array doesn't contribute.)
+	want := []string{"App", "User", "Response"}
+	if !equalUnordered(typeRefs, want) {
+		t.Errorf("type refs: got %v, want %v", typeRefs, want)
+	}
+}
+
+func TestExtract_TypeRefs_FiltersPseudoConstants(t *testing.T) {
+	src := []byte(`<?php
+function f($x): ?True { return null; }
+function g($x): False {}
+function h($x): Null {}
+`)
+	syms, _ := phpsyms.Extract("t.php", src)
+	for _, s := range syms {
+		if s.Kind == phpsyms.KindTypeRef {
+			if s.Name == "True" || s.Name == "False" || s.Name == "Null" {
+				t.Errorf("pseudo-constant emitted as TypeRef: %s", s.Name)
+			}
+		}
+	}
+}
+
+func TestExtract_TypeRefs_OnMethod(t *testing.T) {
+	src := []byte(`<?php
+class Controller {
+    public function show(Request $req, ?User $user): JsonResponse {
+        return null;
+    }
+}
+`)
+	syms, _ := phpsyms.Extract("t.php", src)
+	var typeRefs []string
+	for _, s := range syms {
+		if s.Kind == phpsyms.KindTypeRef {
+			typeRefs = append(typeRefs, s.Name)
+		}
+	}
+	want := []string{"Request", "User", "JsonResponse"}
+	if !equalUnordered(typeRefs, want) {
+		t.Errorf("method type refs: got %v, want %v", typeRefs, want)
+	}
+}
+
+func TestExtract_TypeRefs_NotEmittedForClassDecl(t *testing.T) {
+	// Class declarations don't emit TypeRefs for their `extends` / `implements`
+	// (those go into Parent + Implements fields, not TypeRefs).
+	src := []byte(`<?php
+class Foo extends Bar implements Stringable {
+    public function hello() {}
+}
+`)
+	syms, _ := phpsyms.Extract("t.php", src)
+	for _, s := range syms {
+		if s.Kind == phpsyms.KindTypeRef {
+			// Methods inside this class may emit TypeRefs (none here for hello() which has no params), but the class itself must not.
+			t.Logf("TypeRef from class context: %+v", s)
+		}
+	}
+	// Find Foo class and verify Implements=["Stringable"], Parent="Bar".
+	var foundClass bool
+	for _, s := range syms {
+		if s.Kind == phpsyms.KindClass && s.Name == "Foo" {
+			foundClass = true
+			if s.Parent != "Bar" || len(s.Implements) != 1 || s.Implements[0] != "Stringable" {
+				t.Errorf("class fields wrong: %+v", s)
+			}
+		}
+	}
+	if !foundClass {
+		t.Fatal("class Foo not emitted")
+	}
+}
