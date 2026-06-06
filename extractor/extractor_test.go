@@ -187,3 +187,85 @@ func equalUnordered(a, b []string) bool {
 	}
 	return true
 }
+
+func TestExtract_Calls(t *testing.T) {
+	src := []byte(`<?php
+class Service {
+    public function run() {
+        Cache::get('key');
+        $this->log('msg');
+        helper(1, 2);
+    }
+}`)
+	syms, _ := phpsyms.Extract("t.php", src)
+	var static, method, function []string
+	for _, s := range syms {
+		switch s.Kind {
+		case phpsyms.KindStaticCall:
+			static = append(static, s.Parent+"::"+s.Name)
+		case phpsyms.KindMethodCall:
+			method = append(method, s.Receiver+"->"+s.Name)
+		case phpsyms.KindFunctionCall:
+			function = append(function, s.Name)
+		}
+	}
+	if !sliceContains(static, "Cache::get") {
+		t.Errorf("missing Cache::get; got %v", static)
+	}
+	if !sliceContains(method, "this->log") {
+		t.Errorf("missing this->log; got %v", method)
+	}
+	if !sliceContains(function, "helper") {
+		t.Errorf("missing helper; got %v", function)
+	}
+}
+
+func sliceContains(s []string, want string) bool {
+	for _, x := range s {
+		if x == want {
+			return true
+		}
+	}
+	return false
+}
+
+func TestExtract_NamespacedStaticCall(t *testing.T) {
+	src := []byte(`<?php
+function run() {
+    \App\Services\Cache::get('key');
+}`)
+	syms, _ := phpsyms.Extract("t.php", src)
+	var found bool
+	for _, s := range syms {
+		if s.Kind == phpsyms.KindStaticCall && s.Name == "get" && s.Parent == "\\App\\Services\\Cache" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("namespaced static call not extracted; syms=%+v", syms)
+	}
+}
+
+func TestExtract_FunctionCallNotConfusedWithDecl(t *testing.T) {
+	src := []byte(`<?php
+function realFunc() {
+    other(1);
+}`)
+	syms, _ := phpsyms.Extract("t.php", src)
+	// Expect: 1 KindFunction (realFunc) + 1 KindFunctionCall (other). NOT 2 of either.
+	var fnCount, callCount int
+	for _, s := range syms {
+		if s.Kind == phpsyms.KindFunction {
+			fnCount++
+		}
+		if s.Kind == phpsyms.KindFunctionCall {
+			callCount++
+		}
+	}
+	if fnCount != 1 {
+		t.Errorf("want 1 KindFunction, got %d; syms=%+v", fnCount, syms)
+	}
+	if callCount != 1 {
+		t.Errorf("want 1 KindFunctionCall, got %d; syms=%+v", callCount, syms)
+	}
+}
