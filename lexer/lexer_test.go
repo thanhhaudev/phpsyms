@@ -1,6 +1,9 @@
 package lexer
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestLex_EmptyFile(t *testing.T) {
 	toks := Lex("", []byte(""))
@@ -162,4 +165,157 @@ func TestLex_TokenStartPositionAtFirstByte(t *testing.T) {
 	if toks[2].StartCol != 13 {
 		t.Errorf("ident 'Foo' startpos: got col=%d, want col=13; tok=%+v", toks[2].StartCol, toks[2])
 	}
+}
+
+func TestLex_Nowdoc(t *testing.T) {
+	src := []byte("<?php $x = <<<'EOT'\nhello $name\nEOT;\n")
+	toks := Lex("t.php", src)
+	for _, tk := range toks {
+		if tk.Kind == TokVariable && tk.Value == "$name" {
+			t.Fatalf("$name leaked from nowdoc: %+v", toks)
+		}
+	}
+	// Positive assertion: the string body must contain the literal "$name" text.
+	var sawString bool
+	for _, tk := range toks {
+		if tk.Kind == TokString {
+			sawString = true
+			if !strings.Contains(tk.Value, "$name") {
+				t.Errorf("nowdoc body lost $name text: %q", tk.Value)
+			}
+		}
+	}
+	if !sawString {
+		t.Fatal("no TokString emitted for nowdoc")
+	}
+}
+
+func TestLex_HeredocIndented(t *testing.T) {
+	// PHP 7.3+ allows the closing label to be indented; the indentation is
+	// stripped from each line of the body when PHP interprets it. The lexer
+	// only needs to recognize the closing label and exit heredoc mode.
+	src := []byte("<?php $x = <<<EOT\n        indented content\n        EOT;\n")
+	toks := Lex("t.php", src)
+	// The semicolon after the indented EOT must be emitted as TokSemi —
+	// otherwise the closing label wasn't recognized.
+	var sawSemi bool
+	for _, tk := range toks {
+		if tk.Kind == TokSemi {
+			sawSemi = true
+		}
+	}
+	if !sawSemi {
+		t.Fatalf("indented heredoc closing label not recognized; tokens=%+v", toks)
+	}
+}
+
+func TestLex_BracedInterpolation(t *testing.T) {
+	src := []byte(`<?php $x = "{$obj->prop} done";`)
+	toks := Lex("t.php", src)
+	// $obj must NOT leak as a TokVariable.
+	for _, tk := range toks {
+		if tk.Kind == TokVariable && tk.Value == "$obj" {
+			t.Fatalf("$obj leaked from braced interp: %+v", toks)
+		}
+	}
+	// A TokString must be present.
+	var sawString bool
+	for _, tk := range toks {
+		if tk.Kind == TokString {
+			sawString = true
+		}
+	}
+	if !sawString {
+		t.Fatal("no string token emitted")
+	}
+}
+
+func TestLex_NullCoalesceReturnType(t *testing.T) {
+	// Verify the lexer doesn't choke on PHP 7.1+ nullable type + null-coalesce
+	// in a single function signature + body.
+	src := []byte("<?php function f(?array $a): ?string { return $a['k'] ?? null; }")
+	toks := Lex("t.php", src)
+	var sawF bool
+	for _, tk := range toks {
+		if tk.Kind == TokIdent && tk.Value == "f" {
+			sawF = true
+		}
+	}
+	if !sawF {
+		t.Fatalf("function name not tokenized; tokens=%+v", toks)
+	}
+}
+
+func TestLex_VariableEdgeCases(t *testing.T) {
+	cases := []struct {
+		src      string
+		wantVars []string
+	}{
+		{`<?php $a = 1;`, []string{"$a"}},
+		{`<?php $_foo = 1;`, []string{"$_foo"}},
+		{`<?php $snake_case = 1;`, []string{"$snake_case"}},
+		{`<?php $camelCase = 1;`, []string{"$camelCase"}},
+		{`<?php $with123digits = 1;`, []string{"$with123digits"}},
+		{`<?php $a + $b;`, []string{"$a", "$b"}},
+		{`<?php // $a comment`, nil},
+		{`<?php "string $a"`, nil},
+		{`<?php 'literal $a'`, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.src, func(t *testing.T) {
+			toks := Lex("t.php", []byte(tc.src))
+			var got []string
+			for _, tk := range toks {
+				if tk.Kind == TokVariable {
+					got = append(got, tk.Value)
+				}
+			}
+			if !stringSliceEqual(got, tc.wantVars) {
+				t.Errorf("vars: got %v, want %v", got, tc.wantVars)
+			}
+		})
+	}
+}
+
+// Bare $ with no following ident must not emit TokVariable and must not panic.
+func TestLex_BareDollarSign(t *testing.T) {
+	src := []byte("<?php $ + 1;")
+	toks := Lex("t.php", src)
+	for _, tk := range toks {
+		if tk.Kind == TokVariable {
+			t.Fatalf("bare $ should not emit TokVariable, got %+v", toks)
+		}
+	}
+}
+
+func FuzzLex(f *testing.F) {
+	f.Add([]byte("<?php class Foo {}"))
+	f.Add([]byte("<?php $x = \"hi $name\";"))
+	f.Add([]byte("<?php /* unterminated"))
+	f.Add([]byte("<?php <<<EOT\nhello\nEOT;\n"))
+	f.Add([]byte("<?php <<<'EOT'\nhello\nEOT;\n"))
+	f.Fuzz(func(t *testing.T, src []byte) {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("panic on input %q: %v", src, r)
+			}
+		}()
+		toks := Lex("fuzz.php", src)
+		if len(toks) == 0 || toks[len(toks)-1].Kind != TokEOF {
+			t.Fatalf("Lex did not terminate with TokEOF; tokens=%v", toks)
+		}
+	})
+}
+
+// Helper — only add if not already present in the test file.
+func stringSliceEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
