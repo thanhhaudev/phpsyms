@@ -53,7 +53,10 @@ type Pattern func(c *Cursor, currentClass string) (syms []symtype.Symbol, newCla
 // methods.
 func Run(toks []lexer.Token, patterns []Pattern) []symtype.Symbol {
 	var out []symtype.Symbol
-	c := &Cursor{Tokens: toks}
+	// Stack-allocate the cursor to avoid a heap escape.
+	var cur Cursor
+	cur.Tokens = toks
+	c := &cur
 	currentClass := ""
 	classDepth := 0 // brace depth at which currentClass was opened
 	braceDepth := 0
