@@ -12,7 +12,7 @@ import (
 // On match, advances past the class header and emits a symtype.Symbol; the
 // returned newClass carries the class name forward so MethodDecl can attach
 // methods to it.
-func ClassDecl(c *Cursor, currentClass string) (symtype.Symbol, bool, string) {
+func ClassDecl(c *Cursor, currentClass string) ([]symtype.Symbol, string, bool) {
 	startPos := c.Pos
 	var modifiers []string
 
@@ -33,7 +33,7 @@ func ClassDecl(c *Cursor, currentClass string) (symtype.Symbol, bool, string) {
 
 	if c.Cur().Kind != lexer.TokKeyword || c.Cur().Value != "class" {
 		c.Pos = startPos
-		return symtype.Symbol{}, false, ""
+		return nil, "", false
 	}
 	classKw := c.Cur()
 	c.Advance()
@@ -42,7 +42,7 @@ func ClassDecl(c *Cursor, currentClass string) (symtype.Symbol, bool, string) {
 	if c.Cur().Kind != lexer.TokIdent {
 		// Anonymous class — spike scope does not emit. Phase1 Task 11 will handle.
 		c.Pos = startPos
-		return symtype.Symbol{}, false, ""
+		return nil, "", false
 	}
 	nameTok := c.Cur()
 	c.Advance()
@@ -75,14 +75,14 @@ func ClassDecl(c *Cursor, currentClass string) (symtype.Symbol, bool, string) {
 		}
 	}
 
-	return symtype.Symbol{
+	return []symtype.Symbol{{
 		Kind:       symtype.KindClass,
 		Name:       nameTok.Value,
 		Range:      tokenRange(classKw, nameTok),
 		Modifiers:  modifiers,
 		Parent:     parent,
 		Implements: implements,
-	}, true, nameTok.Value
+	}}, nameTok.Value, true
 }
 
 // consumeQualifiedName reads `Foo\Bar\Baz` style names (with leading \ optional).
@@ -126,17 +126,17 @@ func tokenRange(start, end lexer.Token) symtype.Range {
 // Multi-extends list is captured in Symbol.Implements since Symbol.Parent is
 // single-valued. newClass returned so MethodDecl can attach methods to the
 // interface scope.
-func InterfaceDecl(c *Cursor, currentClass string) (symtype.Symbol, bool, string) {
+func InterfaceDecl(c *Cursor, currentClass string) ([]symtype.Symbol, string, bool) {
 	startPos := c.Pos
 	if c.Cur().Kind != lexer.TokKeyword || c.Cur().Value != "interface" {
-		return symtype.Symbol{}, false, ""
+		return nil, "", false
 	}
 	kw := c.Cur()
 	c.Advance()
 	c.SkipTrivia()
 	if c.Cur().Kind != lexer.TokIdent {
 		c.Pos = startPos
-		return symtype.Symbol{}, false, ""
+		return nil, "", false
 	}
 	nameTok := c.Cur()
 	c.Advance()
@@ -161,34 +161,34 @@ func InterfaceDecl(c *Cursor, currentClass string) (symtype.Symbol, bool, string
 		}
 	}
 
-	return symtype.Symbol{
+	return []symtype.Symbol{{
 		Kind:       symtype.KindInterface,
 		Name:       nameTok.Value,
 		Range:      tokenRange(kw, nameTok),
 		Implements: extends,
-	}, true, nameTok.Value
+	}}, nameTok.Value, true
 }
 
 // TraitDecl matches:
 //
 //	trait Name {
-func TraitDecl(c *Cursor, currentClass string) (symtype.Symbol, bool, string) {
+func TraitDecl(c *Cursor, currentClass string) ([]symtype.Symbol, string, bool) {
 	startPos := c.Pos
 	if c.Cur().Kind != lexer.TokKeyword || c.Cur().Value != "trait" {
-		return symtype.Symbol{}, false, ""
+		return nil, "", false
 	}
 	kw := c.Cur()
 	c.Advance()
 	c.SkipTrivia()
 	if c.Cur().Kind != lexer.TokIdent {
 		c.Pos = startPos
-		return symtype.Symbol{}, false, ""
+		return nil, "", false
 	}
 	nameTok := c.Cur()
 	c.Advance()
-	return symtype.Symbol{
+	return []symtype.Symbol{{
 		Kind:  symtype.KindTrait,
 		Name:  nameTok.Value,
 		Range: tokenRange(kw, nameTok),
-	}, true, nameTok.Value
+	}}, nameTok.Value, true
 }

@@ -10,9 +10,9 @@ import (
 //	[public|protected|private|static|abstract|final]* function name(...) [: RetType] {
 //
 // Only emits when inside a class scope (currentClass != "").
-func MethodDecl(c *Cursor, currentClass string) (symtype.Symbol, bool, string) {
+func MethodDecl(c *Cursor, currentClass string) ([]symtype.Symbol, string, bool) {
 	if currentClass == "" {
-		return symtype.Symbol{}, false, ""
+		return nil, "", false
 	}
 	startPos := c.Pos
 	var modifiers []string
@@ -34,7 +34,7 @@ func MethodDecl(c *Cursor, currentClass string) (symtype.Symbol, bool, string) {
 
 	if c.Cur().Kind != lexer.TokKeyword || c.Cur().Value != "function" {
 		c.Pos = startPos
-		return symtype.Symbol{}, false, ""
+		return nil, "", false
 	}
 	fnKw := c.Cur()
 	c.Advance()
@@ -42,16 +42,16 @@ func MethodDecl(c *Cursor, currentClass string) (symtype.Symbol, bool, string) {
 
 	if c.Cur().Kind != lexer.TokIdent {
 		c.Pos = startPos
-		return symtype.Symbol{}, false, ""
+		return nil, "", false
 	}
 	nameTok := c.Cur()
 	c.Advance()
 
-	return symtype.Symbol{
+	return []symtype.Symbol{{
 		Kind:      symtype.KindMethod,
 		Name:      nameTok.Value,
 		Range:     tokenRange(fnKw, nameTok),
 		Modifiers: modifiers,
 		Parent:    currentClass,
-	}, true, ""
+	}}, "", true
 }

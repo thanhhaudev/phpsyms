@@ -35,29 +35,58 @@ func (c *Cursor) SkipTrivia() {
 	}
 }
 
+// Pattern matches starting at c.Cur. On match, returns one or more symbols,
+// the new "current class" scope (or empty to keep current), and ok=true.
+// Patterns MUST advance the cursor past the consumed tokens on match;
+// MUST leave the cursor at startPos on no-match (handled by caller for safety).
+type Pattern func(c *Cursor, currentClass string) (syms []symtype.Symbol, newClass string, ok bool)
+
 // Run walks all tokens and applies registered patterns. The order matters —
 // pattern attempts are tried in the order added. Patterns return
-// (sym, ok, newClass) — when ok is true the symbol is appended; when newClass
-// is non-empty it becomes the current class scope for subsequent MethodDecl
-// matches. On no-match the cursor is rewound to startPos and the next pattern
-// is tried.
-func Run(toks []lexer.Token, patterns []func(c *Cursor, currentClass string) (symtype.Symbol, bool, string)) []symtype.Symbol {
+// (syms, newClass, ok) — when ok is true the symbols are appended; when
+// newClass is non-empty it becomes the current class scope for subsequent
+// MethodDecl matches. On no-match the cursor is rewound to startPos and the
+// next pattern is tried.
+//
+// Brace depth is tracked to clear currentClass when execution exits the
+// class body, so top-level functions after a class are not misattributed as
+// methods.
+func Run(toks []lexer.Token, patterns []Pattern) []symtype.Symbol {
 	var out []symtype.Symbol
 	c := &Cursor{Tokens: toks}
 	currentClass := ""
+	classDepth := 0 // brace depth at which currentClass was opened
+	braceDepth := 0
 	for !c.Done() {
 		c.SkipTrivia()
 		if c.Done() {
 			break
 		}
+
+		// Track brace depth for class scope exit. Update BEFORE pattern dispatch
+		// so a pattern emitted at this token sees the correct scope.
+		switch c.Cur().Kind {
+		case lexer.TokLBrace:
+			braceDepth++
+		case lexer.TokRBrace:
+			braceDepth--
+			if currentClass != "" && braceDepth < classDepth {
+				currentClass = ""
+				classDepth = 0
+			}
+		}
+
 		matched := false
 		for _, p := range patterns {
 			startPos := c.Pos
-			sym, ok, newClass := p(c, currentClass)
+			syms, newClass, ok := p(c, currentClass)
 			if ok {
-				out = append(out, sym)
+				out = append(out, syms...)
 				if newClass != "" {
 					currentClass = newClass
+					// Class body brace not yet entered; record depth AT WHICH
+					// the body will sit (braceDepth + 1).
+					classDepth = braceDepth + 1
 				}
 				matched = true
 				break
