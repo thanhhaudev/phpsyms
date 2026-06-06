@@ -385,6 +385,22 @@ class Controller {
 	}
 }
 
+func TestExtract_TypeRefs_HaveLineNumbers(t *testing.T) {
+	src := []byte(`<?php
+class C {
+    public function show(User $u): JsonResponse {}
+}
+`)
+	syms, _ := phpsyms.Extract("t.php", src)
+	for _, s := range syms {
+		if s.Kind == phpsyms.KindTypeRef {
+			if s.Range.StartLine < 1 {
+				t.Errorf("TypeRef %s has StartLine=%d; want >=1", s.Name, s.Range.StartLine)
+			}
+		}
+	}
+}
+
 func TestExtract_TypeRefs_NotEmittedForClassDecl(t *testing.T) {
 	// Class declarations don't emit TypeRefs for their `extends` / `implements`
 	// (those go into Parent + Implements fields, not TypeRefs).

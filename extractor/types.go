@@ -27,10 +27,14 @@ func collectTypeRefs(c *Cursor) []symtype.Symbol {
 	}
 
 	// Capture parameter list byte range (between the outer `(` and `)`).
-	paramsStart := c.Cur().StartByte + 1 // byte after `(`
+	// Also record the opening `(` token so we can attach its line position to
+	// every param TypeRef — this is the "param-list anchor" line number.
+	lparenTok := c.Cur()
+	paramsStart := lparenTok.StartByte + 1 // byte after `(`
 	paramsEnd := -1
 	returnTypeStart := -1
 	returnTypeEnd := -1
+	var returnTypeTok lexer.Token // first non-trivia token of the return type
 
 	c.Advance()
 	depth := 1
@@ -53,7 +57,8 @@ func collectTypeRefs(c *Cursor) []symtype.Symbol {
 	if c.Cur().Kind == lexer.TokColon {
 		c.Advance()
 		c.SkipTrivia()
-		returnTypeStart = c.Cur().StartByte
+		returnTypeTok = c.Cur() // first real token of the return type annotation
+		returnTypeStart = returnTypeTok.StartByte
 		// Scan until `{` (method/function body) or `;` (abstract/interface method).
 		for !c.Done() {
 			k := c.Cur().Kind
@@ -76,9 +81,14 @@ func collectTypeRefs(c *Cursor) []symtype.Symbol {
 		paramText := string(src[paramsStart:paramsEnd])
 		for _, typeName := range extractTypeNames(paramText) {
 			out = append(out, symtype.Symbol{
-				Kind:  symtype.KindTypeRef,
-				Name:  typeName,
-				Range: symtype.Range{StartByte: paramsStart, EndByte: paramsEnd},
+				Kind: symtype.KindTypeRef,
+				Name: typeName,
+				Range: symtype.Range{
+					StartLine: lparenTok.StartLine,
+					StartCol:  lparenTok.StartCol,
+					StartByte: paramsStart,
+					EndByte:   paramsEnd,
+				},
 			})
 		}
 	}
@@ -87,9 +97,14 @@ func collectTypeRefs(c *Cursor) []symtype.Symbol {
 		retText := string(src[returnTypeStart:returnTypeEnd])
 		for _, typeName := range extractTypeNames(retText) {
 			out = append(out, symtype.Symbol{
-				Kind:  symtype.KindTypeRef,
-				Name:  typeName,
-				Range: symtype.Range{StartByte: returnTypeStart, EndByte: returnTypeEnd},
+				Kind: symtype.KindTypeRef,
+				Name: typeName,
+				Range: symtype.Range{
+					StartLine: returnTypeTok.StartLine,
+					StartCol:  returnTypeTok.StartCol,
+					StartByte: returnTypeStart,
+					EndByte:   returnTypeEnd,
+				},
 			})
 		}
 	}

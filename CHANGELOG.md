@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.1 — 2026-06-06
+
+- Fix: KindTypeRef symbols now populate Range.StartLine + StartCol (param-list
+  opening `(` for param refs; first return-type token for return refs).
+  Previously these were zero, breaking downstream Line-based dedup.
+
 ## v0.2.0 — 2026-06-06
 
 - New `KindTypeRef` symbol kind: emitted from function/method parameter type
