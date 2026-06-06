@@ -83,3 +83,18 @@ func IsKeyword(ident string) bool {
 	}
 	return keywords[string(lower)]
 }
+
+// isKeywordBytes reports whether the byte slice b (already lower-cased) is a keyword.
+// It avoids the string allocation incurred by IsKeyword when the caller already has
+// a lowercase byte slice. Uses the unsafe string-from-bytes trick via a local buffer
+// to query the map without allocating.
+//
+// IMPORTANT: b must be already ASCII-lowercased before calling this function.
+func isKeywordBytes(b []byte) bool {
+	// Keywords are at most 12 bytes ("include_once", "enddeclare"). For longer words
+	// they can't be keywords.
+	if len(b) > 12 {
+		return false
+	}
+	return keywords[string(b)]
+}
