@@ -42,6 +42,9 @@ No AST, no parse tree, no error recovery beyond "skip the token, try the
 next pattern". This is what makes it fast (~5000 files/sec) and small
 (~1.5k LOC for full PHP 7.4 coverage plus TypeRef extraction).
 
+For a deeper walk-through of the lexer states, the transitions between
+them, and how to add a new state, see [docs/lexer-design.md](docs/lexer-design.md).
+
 ## Example
 
 **Input** (`UserController.php`):
