@@ -121,8 +121,8 @@ func tokenRange(start, end lexer.Token) symtype.Range {
 	return symtype.Range{
 		StartLine: start.StartLine,
 		StartCol:  start.StartCol,
-		EndLine:   end.StartLine,
-		EndCol:    end.StartCol,
+		EndLine:   end.EndLine,
+		EndCol:    end.EndCol,
 		StartByte: start.StartByte,
 		EndByte:   end.EndByte,
 	}

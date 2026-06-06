@@ -307,6 +307,75 @@ func FuzzLex(f *testing.F) {
 	})
 }
 
+func TestLex_TokenEndPosition(t *testing.T) {
+	// For `<?php class Foo`:
+	// - `<?php` spans byte 0..5, EndCol should be 6 (exclusive col after last byte)
+	// - `class` (after the space at byte 5) spans byte 6..11, EndCol should be 12
+	// - `Foo` spans byte 12..15, EndCol should be 16
+	src := []byte("<?php class Foo")
+	toks := Lex("t.php", src)
+	if len(toks) < 3 {
+		t.Fatalf("need at least 3 tokens, got %d", len(toks))
+	}
+	// toks[0] = TokOpenTag "<?php"
+	if toks[0].EndCol != 6 || toks[0].EndByte != 5 {
+		t.Errorf("OpenTag end: got col=%d byte=%d, want col=6 byte=5; tok=%+v", toks[0].EndCol, toks[0].EndByte, toks[0])
+	}
+	// toks[1] = TokKeyword "class" starting col 7
+	if toks[1].Value != "class" {
+		t.Fatalf("unexpected toks[1]: %+v", toks[1])
+	}
+	if toks[1].EndCol != 12 {
+		t.Errorf("class EndCol: got %d, want 12; tok=%+v", toks[1].EndCol, toks[1])
+	}
+	// toks[2] = TokIdent "Foo" starting col 13
+	if toks[2].Value != "Foo" {
+		t.Fatalf("unexpected toks[2]: %+v", toks[2])
+	}
+	if toks[2].EndCol != 16 {
+		t.Errorf("Foo EndCol: got %d, want 16; tok=%+v", toks[2].EndCol, toks[2])
+	}
+}
+
+func TestLex_PunctEndPosition(t *testing.T) {
+	// Verify single-byte punct has EndCol = StartCol + 1.
+	src := []byte("<?php {")
+	toks := Lex("t.php", src)
+	var lbrace *Token
+	for i := range toks {
+		if toks[i].Kind == TokLBrace {
+			lbrace = &toks[i]
+			break
+		}
+	}
+	if lbrace == nil {
+		t.Fatal("no LBrace token")
+	}
+	if lbrace.EndCol != lbrace.StartCol+1 {
+		t.Errorf("LBrace EndCol: got %d, StartCol=%d, want EndCol=StartCol+1", lbrace.EndCol, lbrace.StartCol)
+	}
+}
+
+func TestLex_TwoBytePunctEndPosition(t *testing.T) {
+	src := []byte("<?php ::->")
+	toks := Lex("t.php", src)
+	var doublecolon, arrow *Token
+	for i := range toks {
+		if toks[i].Kind == TokDoubleColon {
+			doublecolon = &toks[i]
+		}
+		if toks[i].Kind == TokArrow {
+			arrow = &toks[i]
+		}
+	}
+	if doublecolon == nil || doublecolon.EndCol != doublecolon.StartCol+2 {
+		t.Errorf("DoubleColon end-pos wrong: %+v", doublecolon)
+	}
+	if arrow == nil || arrow.EndCol != arrow.StartCol+2 {
+		t.Errorf("Arrow end-pos wrong: %+v", arrow)
+	}
+}
+
 // Helper — only add if not already present in the test file.
 func stringSliceEqual(a, b []string) bool {
 	if len(a) != len(b) {

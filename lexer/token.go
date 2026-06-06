@@ -36,8 +36,10 @@ const (
 type Token struct {
 	Kind      TokenKind
 	Value     string // raw text for keyword/ident/string; unused for punct
-	StartLine int    // 1-based
-	StartCol  int    // 1-based byte column within line
-	StartByte int    // 0-based byte offset
+	StartLine int    // 1-based line at first byte
+	StartCol  int    // 1-based byte column at first byte
+	EndLine   int    // 1-based line at byte AFTER last byte (exclusive)
+	EndCol    int    // 1-based byte column at byte AFTER last byte (exclusive)
+	StartByte int    // 0-based byte offset, inclusive
 	EndByte   int    // 0-based byte offset, exclusive
 }

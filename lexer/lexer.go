@@ -44,17 +44,38 @@ func (l *lexer) run() {
 }
 
 // emitAt appends a token using explicitly provided start position metadata.
-// Use this for all tokens — it captures StartLine/StartCol at the token's first byte,
-// not at the post-advance position.
+// EndLine/EndCol are taken from l.line/l.col at the moment of the call, which
+// must be AFTER all advance() calls for this token — i.e. they reflect the
+// position immediately following the last consumed byte.
 func (l *lexer) emitAt(kind TokenKind, value string, startLine, startCol, start, end int) {
 	l.tokens = append(l.tokens, Token{
 		Kind:      kind,
 		Value:     value,
 		StartLine: startLine,
 		StartCol:  startCol,
+		EndLine:   l.line,
+		EndCol:    l.col,
 		StartByte: start,
 		EndByte:   end,
 	})
+}
+
+// emitSinglePunct emits a 1-byte punctuation token. It captures the start
+// position, advances 1 byte, then emits so that EndLine/EndCol reflect the
+// position AFTER the consumed byte (matching the exclusive-end semantic).
+func (l *lexer) emitSinglePunct(kind TokenKind, value string) {
+	startLine, startCol := l.line, l.col
+	start := l.pos
+	l.advance(1)
+	l.emitAt(kind, value, startLine, startCol, start, l.pos)
+}
+
+// emitTwoBytePunct does the same for 2-byte tokens (e.g. "::", "->").
+func (l *lexer) emitTwoBytePunct(kind TokenKind, value string) {
+	startLine, startCol := l.line, l.col
+	start := l.pos
+	l.advance(2)
+	l.emitAt(kind, value, startLine, startCol, start, l.pos)
 }
 
 func (l *lexer) advance(n int) {
@@ -218,57 +239,41 @@ func (l *lexer) lexPHP() {
 
 	switch c {
 	case '{':
-		l.emitAt(TokLBrace, "{", l.line, l.col, l.pos, l.pos+1)
-		l.advance(1)
+		l.emitSinglePunct(TokLBrace, "{")
 	case '}':
-		l.emitAt(TokRBrace, "}", l.line, l.col, l.pos, l.pos+1)
-		l.advance(1)
+		l.emitSinglePunct(TokRBrace, "}")
 	case '(':
-		l.emitAt(TokLParen, "(", l.line, l.col, l.pos, l.pos+1)
-		l.advance(1)
+		l.emitSinglePunct(TokLParen, "(")
 	case ')':
-		l.emitAt(TokRParen, ")", l.line, l.col, l.pos, l.pos+1)
-		l.advance(1)
+		l.emitSinglePunct(TokRParen, ")")
 	case '[':
-		l.emitAt(TokLBracket, "[", l.line, l.col, l.pos, l.pos+1)
-		l.advance(1)
+		l.emitSinglePunct(TokLBracket, "[")
 	case ']':
-		l.emitAt(TokRBracket, "]", l.line, l.col, l.pos, l.pos+1)
-		l.advance(1)
+		l.emitSinglePunct(TokRBracket, "]")
 	case ';':
-		l.emitAt(TokSemi, ";", l.line, l.col, l.pos, l.pos+1)
-		l.advance(1)
+		l.emitSinglePunct(TokSemi, ";")
 	case ',':
-		l.emitAt(TokComma, ",", l.line, l.col, l.pos, l.pos+1)
-		l.advance(1)
+		l.emitSinglePunct(TokComma, ",")
 	case ':':
 		if l.pos+1 < len(l.src) && l.src[l.pos+1] == ':' {
-			l.emitAt(TokDoubleColon, "::", l.line, l.col, l.pos, l.pos+2)
-			l.advance(2)
+			l.emitTwoBytePunct(TokDoubleColon, "::")
 		} else {
-			l.emitAt(TokColon, ":", l.line, l.col, l.pos, l.pos+1)
-			l.advance(1)
+			l.emitSinglePunct(TokColon, ":")
 		}
 	case '-':
 		if l.pos+1 < len(l.src) && l.src[l.pos+1] == '>' {
-			l.emitAt(TokArrow, "->", l.line, l.col, l.pos, l.pos+2)
-			l.advance(2)
+			l.emitTwoBytePunct(TokArrow, "->")
 		} else {
-			l.emitAt(TokOther, "-", l.line, l.col, l.pos, l.pos+1)
-			l.advance(1)
+			l.emitSinglePunct(TokOther, "-")
 		}
 	case '\\':
-		l.emitAt(TokBackslash, "\\", l.line, l.col, l.pos, l.pos+1)
-		l.advance(1)
+		l.emitSinglePunct(TokBackslash, "\\")
 	case '?':
-		l.emitAt(TokQuestion, "?", l.line, l.col, l.pos, l.pos+1)
-		l.advance(1)
+		l.emitSinglePunct(TokQuestion, "?")
 	case '=':
-		l.emitAt(TokEquals, "=", l.line, l.col, l.pos, l.pos+1)
-		l.advance(1)
+		l.emitSinglePunct(TokEquals, "=")
 	default:
-		l.emitAt(TokOther, string(c), l.line, l.col, l.pos, l.pos+1)
-		l.advance(1)
+		l.emitSinglePunct(TokOther, string(c))
 	}
 }
 
