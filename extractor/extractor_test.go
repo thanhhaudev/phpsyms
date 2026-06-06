@@ -106,3 +106,84 @@ trait HasTimestamps
 		t.Errorf("trait method 'touch' not emitted; syms=%+v", syms)
 	}
 }
+
+func TestExtract_Function(t *testing.T) {
+	src := []byte(`<?php
+function helper(int $x): string { return ""; }
+`)
+	syms, _ := phpsyms.Extract("t.php", src)
+	if len(syms) != 1 || syms[0].Kind != phpsyms.KindFunction || syms[0].Name != "helper" {
+		t.Fatalf("want function helper, got %+v", syms)
+	}
+}
+
+func TestExtract_FunctionAfterClass(t *testing.T) {
+	// Verifies the brace-depth fix: a top-level function after a closing
+	// class brace must be emitted as KindFunction (currentClass cleared),
+	// NOT as KindMethod attached to the previous class.
+	src := []byte(`<?php
+class A {
+    public function foo() {}
+}
+
+function topLevel() {}
+`)
+	syms, _ := phpsyms.Extract("t.php", src)
+	var sawTopLevelFn bool
+	var topLevelKind phpsyms.SymbolKind
+	for _, s := range syms {
+		if s.Name == "topLevel" {
+			sawTopLevelFn = true
+			topLevelKind = s.Kind
+		}
+	}
+	if !sawTopLevelFn {
+		t.Fatalf("topLevel not emitted; syms=%+v", syms)
+	}
+	if topLevelKind != phpsyms.KindFunction {
+		t.Errorf("topLevel kind: got %v, want KindFunction", topLevelKind)
+	}
+}
+
+func TestExtract_UseImports(t *testing.T) {
+	src := []byte(`<?php
+use App\Models\User;
+use App\Http\{Request, Response};
+use App\Auth\Guard as AuthGuard;
+`)
+	syms, _ := phpsyms.Extract("t.php", src)
+	var names []string
+	for _, s := range syms {
+		if s.Kind == phpsyms.KindUseImport {
+			names = append(names, s.Qualified)
+		}
+	}
+	want := []string{
+		"App\\Models\\User",
+		"App\\Http\\Request",
+		"App\\Http\\Response",
+		"App\\Auth\\Guard",
+	}
+	if !equalUnordered(names, want) {
+		t.Fatalf("use imports: got %v, want %v", names, want)
+	}
+}
+
+func equalUnordered(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	m := map[string]int{}
+	for _, x := range a {
+		m[x]++
+	}
+	for _, x := range b {
+		m[x]--
+	}
+	for _, v := range m {
+		if v != 0 {
+			return false
+		}
+	}
+	return true
+}
