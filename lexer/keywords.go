@@ -85,9 +85,10 @@ func IsKeyword(ident string) bool {
 }
 
 // isKeywordBytes reports whether the byte slice b (already lower-cased) is a keyword.
-// It avoids the string allocation incurred by IsKeyword when the caller already has
-// a lowercase byte slice. Uses the unsafe string-from-bytes trick via a local buffer
-// to query the map without allocating.
+// It lets callers that already have a lowercase byte slice (e.g., the lexer's
+// stack-buffer fast-path) skip building their own string before the map lookup.
+// The map query still costs one `string(b)` conversion — Go's spec-mandated
+// allocation — but the caller saves any allocation it would have done itself.
 //
 // IMPORTANT: b must be already ASCII-lowercased before calling this function.
 func isKeywordBytes(b []byte) bool {
