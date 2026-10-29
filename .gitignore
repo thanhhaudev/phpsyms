@@ -12,4 +12,4 @@ spike-validate
 .DS_Store
 
 # Local-only fixtures (0PLXX-derived samples never committed)
-testdata/0PLXX-local/
+testdata/[o]neplat-local/
